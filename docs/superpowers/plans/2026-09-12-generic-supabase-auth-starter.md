@@ -10,11 +10,50 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-12-generic-supabase-auth-starter-design.md`
 
+## Continuation Checkpoint — 2026-10-10
+
+- Live sign-in testing with external providers is deferred at the user's request. Continue independent verification without creating provider accounts or changing their settings.
+- The user does not want Git, commit, or push operations at this stage; this overrides the Git-related steps below.
+- Fresh verification: formatting, ESLint, and TypeScript checks passed. All 207 Vitest tests across 28 files passed with `npm run test:run -- --maxWorkers=1`.
+- The first parallel test run hit five timeouts on a heavily loaded machine; both the focused sequential rerun and the full sequential suite passed without changing test timeouts.
+- `npm run build:webpack` passed. The default Turbopack build remains blocked by an environment process/port permission error, including on retry; the Webpack result does not establish that the default build passes.
+- Added `supabase/.temp/` to `.prettierignore` so generated Supabase CLI state is excluded from formatting checks; confirmed the exclusion with the Prettier API before and after the fix.
+- Browser E2E and database RLS suites were not run at this checkpoint: the local Supabase stack is not running. Kids Control and unrelated Docker containers were left unchanged.
+- Next independent steps: browser and database verification against an isolated local Supabase stack, then verification of the documented new-site adoption and customization workflow. Real external-provider sign-in remains deferred.
+
+### Local verification completed — 2026-10-10
+
+- Started only the `generic-supabase-auth-starter` local stack, excluding optional logging services. Existing local volumes/data were preserved; no database reset or hosted write was performed.
+- `npm run test:db -- --local`: all 38 pgTAP assertions passed, covering profile creation, grants, protected columns, anonymous isolation, and owner/cross-user RLS.
+- `npm run test:e2e -- --project=chromium`: all 12 browser tests passed. Added coverage for anonymous profile/recovery access, 320px form layout, profile persistence after reload, and rejection of the reset form for an ordinary non-recovery session. Email signup, confirmation, logout/login, PKCE recovery, old-password rejection, locale/theme persistence, provider-button configuration, and callback failures also passed.
+- The first runs exposed an ambiguous link selector and a mismatched expected alert in the new tests; corrected the tests after checking the existing UI. No application-code changes were needed.
+- Final formatting, ESLint, TypeScript, and 207 unit/component tests passed after the test edits. Supplemental Webpack production build passed with inert public CI settings; the standard Turbopack production build still fails with the environment process/port permission error.
+- An independent read-only review found no issues in the new browser assertions. This was not an audit of hosted behavior, real OAuth sign-ins, or comprehensive mobile accessibility.
+- Deleted exactly four temporary local Auth users/profiles created by these runs; confirmed the pre-existing local test account remained. Stopped only this project's test stack with backups enabled; Docker volumes and unrelated containers were retained.
+- Verified that all 14 documented npm scripts exist, checked the public-only environment template, and reviewed the auth boundaries. A fresh-copy new-site adoption/customization rehearsal remains a separate next step; live provider authentication is still deferred.
+
+### Reusable-template hardening completed — 2026-10-10
+
+- Approved scope: configurable home branding and shared color tokens, optional languages, a central dictionary registry with a derived locale type, safe dependency updates, adoption instructions, and regression verification. No Git operations or hosted Supabase changes were authorized or performed.
+- Home branding now uses `siteConfig.name`/`siteConfig.logo`, and home/auth controls share light/dark CSS tokens. The locale switcher renders only enabled languages in configuration order; unknown or disabled action inputs cannot change the locale cookie. Request-language matching supports regional/intermediate subtags and falls back to an enabled language.
+- Followed test-first implementation: observed failures for branding, disabled languages, third-language registry resolution, disabled defaults, regional casing, and intermediate-subtag fallback before implementing their fixes.
+- Updated the locked toolchain, including Next.js 16.3.8, and removed unused lint/alias dependencies. Clean `npm ci` passed. Node engines, lockfile metadata, and README now agree on Node 24.15+ within 24.x, or Node 26+; strict engine validation passed on Node 24.21.0.
+- All 227 unit/component tests across 30 files passed sequentially. Formatting, ESLint, and TypeScript checks passed. All 38 local database/RLS assertions passed.
+- All 13 Chromium scenarios passed against the development server and again against the Webpack production build, including the complete local email/password lifecycle and custom palette coverage.
+- A separate clean adopter copy passed three Chromium checks for its own brand/logo/metadata, English-only configuration, and custom light/dark colors. Registering a test French dictionary and enabling it passed typechecking and two more browser checks for selection, navigation/reload persistence, and `fr-CA` browser preference. The French fixture is not shipped in the starter.
+- The browser-preference rehearsal initially failed because Chromium actually sent `en-US` instead of the manually set header; request-header instrumentation established the cause. Setting the browser context's locale fixed the test without application changes.
+- Webpack production compilation passed after the final source changes. The default Turbopack production build still fails with the environment process/port permission error, including an escalated retry; neither CI nor a successful default build is claimed.
+- Final `npm audit --omit=dev` reported zero vulnerabilities. Full audit reported four high-severity entries in the same development-only Next ESLint plugin / fast-glob / micromatch / braces chain; the offered fix is a major tooling downgrade, not a compatible upstream update. The exception and release-time recheck are documented in README.
+- An independent read-only review found no remaining critical, important, or minor issues in the scoped changes after its findings were resolved. This does not establish live OAuth behavior or constitute a comprehensive security audit.
+- Deleted exactly the two new local browser-test Auth users and verified that their profiles were removed by the existing cascade. The pre-existing account remained. Stopped only this project's local stack with backups enabled; all three project volumes were retained, and all 17 other containers running immediately before the stop were still running afterward. `.env.local` was unchanged.
+- Google/Facebook/Apple and other live provider sign-ins, hosted SMTP configuration, and deployment remain intentionally deferred.
+
 ## Global Constraints
 
-- Use Node.js 24 with npm; commit `package-lock.json` and pin the installed stable dependency versions there.
+- Use Node.js 24.15+ within 24.x (recommended), or Node.js 26+, with npm; keep the installed dependency versions in `package-lock.json`.
+- On 2026-10-14 the user explicitly authorized connecting `https://github.com/viktar-mar/login`, committing, and pushing the reviewed starter. This supersedes the earlier no-Git constraint for that publication only. Exclude local environment files, secrets, generated files, and temporary/test artifacts; never force-push or rewrite existing history without separate authorization.
 - Support Google, Facebook, Apple, GitHub, Microsoft (`azure`), and Discord; each provider and email/password must be independently configurable.
-- Keep routes unprefixed by locale; resolve `en` or `ru` from a locale cookie, then `Accept-Language`, then the configured default.
+- Keep routes unprefixed by locale; resolve an enabled registered language from a locale cookie, then `Accept-Language`, then an enabled configured fallback. English and Russian are provided but optional.
 - Default minimum password length is 8 and must match the Supabase project setting documented in the setup guide.
 - Use only the Supabase project URL and publishable key in the application. Never add a secret key, legacy `service_role` key, provider secret, password, token, or authorization code to source control or browser output.
 - Use `supabase.auth.getClaims()` in protected server layouts and data access; request-proxy redirects are not the sole authorization boundary.

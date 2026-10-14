@@ -1,0 +1,17 @@
+node_modules/
+.next/
+next-env.d.ts
+out/
+.vercel/
+.turbo/
+.superpowers/
+.DS_Store
+*.log
+coverage/
+*.tsbuildinfo
+playwright-report/
+test-results/
+playwright/.auth/
+blob-report/
+.env*
+!.env.example
