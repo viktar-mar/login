@@ -275,6 +275,45 @@ If your pipeline does not inject the exact origin into every preview build, limi
 
 Provider callback URLs still point to Supabase, never to Vercel. Add the production callback, the exact stable staging callback if used, and only the necessary scoped preview wildcard to Supabase's redirect allowlist. Redeploy after changing any `NEXT_PUBLIC_*` value because those values are compiled into browser bundles.
 
+#### Optional Vercel Auth rate-limit observation
+
+This starter does not require Vercel Firewall, an extra SDK, Redis, or a privileged Supabase key. On Vercel, you can optionally observe the combined email/password login, signup, and recovery request rate by the **client IP**. This is a project setting, not application configuration; copying the repository or deploying on another host does not enable it.
+
+Use Vercel's [Server Action Name condition](https://vercel.com/docs/vercel-firewall/vercel-waf/rule-configuration), supported with Next.js 15.5+, instead of relying only on `/login`, `/signup`, and `/forgot-password` paths. Server Actions can be invoked from other pages, and their generated IDs change between builds. The matcher below selects the three source-file/export names, allowing both `features/...` and `src/features/...` manifest paths. If you move the action module or rename its exports, update the rule and verify matching again.
+
+Start with a **log-only** [rate-limit rule](https://vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting): 60 combined requests per IP per 60-second fixed window. This is an initial observation threshold, not a production recommendation. Exceeding it must only log, never deny, challenge, or return 429. Counters are per Vercel region, not a globally exact limit. Hobby currently includes one rate-limit rule per project and 1,000,000 allowed requests; review the current plan, pricing, and existing rule usage before publishing. Do not enable a paid plan or add-on just for this step.
+
+With an authenticated Vercel CLI, replace both placeholders with the intended project and personal account/team scope. Verify the owner and existing drafts before staging anything. Do not use a working organization or auto-link to a different project:
+
+```bash
+vercel project inspect YOUR_PROJECT_ID --scope YOUR_PERSONAL_SCOPE --non-interactive
+vercel firewall rules list --project YOUR_PROJECT_ID --scope YOUR_PERSONAL_SCOPE --json --non-interactive
+vercel firewall diff --project YOUR_PROJECT_ID --scope YOUR_PERSONAL_SCOPE --json --non-interactive
+```
+
+If a matching rule already exists, inspect it instead of creating a duplicate. If there are unrelated drafts, stop and coordinate with their owner; publishing applies all pending firewall changes. Otherwise, stage this rule (it does **not** publish it):
+
+```bash
+vercel firewall rules add 'Auth email actions - observe' \
+  --project YOUR_PROJECT_ID --scope YOUR_PERSONAL_SCOPE \
+  --condition '{"type":"method","op":"eq","value":"POST"}' \
+  --condition '{"type":"server_action","op":"re","value":"(^|/)features/auth/actions[.]ts#(loginAction|signupAction|forgotPasswordAction)$"}' \
+  --action rate_limit \
+  --rate-limit-window 60 --rate-limit-requests 60 \
+  --rate-limit-keys ip --rate-limit-action log \
+  --yes --non-interactive
+
+vercel firewall rules inspect 'Auth email actions - observe' \
+  --project YOUR_PROJECT_ID --scope YOUR_PERSONAL_SCOPE --json --non-interactive
+vercel firewall diff --project YOUR_PROJECT_ID --scope YOUR_PERSONAL_SCOPE --json --non-interactive
+```
+
+Verify that the only intended change is this rule and its nested `rateLimit.action` is `log`. Then the project owner can open **Firewall → Review Changes → Publish** in Vercel. A draft observes nothing until published. Keep it in log-only mode while reviewing traffic at `https://vercel.com/YOUR_PERSONAL_SCOPE/YOUR_PROJECT_NAME/firewall/traffic?filter=YOUR_RULE_ID`; no background monitoring is installed by this repository.
+
+After publication, verify real submissions for all three forms and confirm Vercel resolves their expected Server Action names. Also check that page GETs, OAuth, sign-out, profile edits, and recovery password updates are outside this rule. Ordinary submissions below the threshold may not create an exceedance log; absence of logs alone does not prove matching. Do not flood the real Auth API to force a log or consume SMTP quotas. Inspect matching request metadata in the dashboard; do not share passwords, CAPTCHA tokens, cookies, email links, or raw request bodies. Only tighten or enforce after reviewing representative traffic, including users sharing an IP, and testing enforcement in an isolated preview with a separately reviewed change. Roll back a live rule by disabling that rule or returning it to log-only, reviewing the diff, and publishing again; never discard unrelated drafts.
+
+This rule reduces application-side abuse only once enforcement is explicitly enabled. It does **not** change the IP Supabase sees for server-side Auth requests, protect direct calls to Supabase, raise project-wide email quotas, or prevent proxy/session-refresh calls made before Server Action matching. Keep Supabase CAPTCHA and Auth limits configured independently. Supabase [IP forwarding](https://supabase.com/docs/guides/auth/rate-limits#ip-address-forwarding) requires explicit enablement and a modern secret API key; adding a header with this starter's publishable key is not a solution. Do not add a privileged key or loosen Supabase limits to make this observation rule work.
+
 ### Any Node.js host
 
 Use a supported Node.js host (24.15–24.x or 26+) that provides a persistent Next.js server, HTTPS, environment variables, and forwarded cookies/headers:
