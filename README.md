@@ -131,6 +131,21 @@ Both auth link handlers return `Cache-Control: private, no-cache, no-store, must
 
 Compare with the checked-in `supabase/templates/confirmation.html` and `supabase/templates/recovery.html`. Supabase documents the available variables in [Email Templates](https://supabase.com/docs/guides/auth/auth-email-templates). Without [custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp), Supabase's hosted default sender is for evaluation: signup and recovery messages can be sent only to email addresses belonging to members of the project's Supabase team. Configure custom SMTP before testing arbitrary alternate addresses or serving real users.
 
+### Optional bot protection: Cloudflare Turnstile
+
+CAPTCHA is disabled by default (`NEXT_PUBLIC_CAPTCHA_PROVIDER=none`). No Cloudflare script or token is required in this mode. To enable it for email/password sign-in, signup and password-recovery requests:
+
+1. Create a **Managed** widget in [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/get-started/widget-management/dashboard/). Allow only the hostnames you operate (hostname only, without scheme or path). A Vercel hostname works; moving DNS to Cloudflare is not required. Leave pre-clearance disabled.
+2. Set `NEXT_PUBLIC_CAPTCHA_PROVIDER=turnstile` and `NEXT_PUBLIC_TURNSTILE_SITE_KEY` to the widget's **public sitekey** in your app's deployment environment. These are build-time settings: rebuild/redeploy after changes. A missing sitekey prevents the app from starting rather than silently disabling protection.
+3. In the corresponding **Supabase project → Authentication → Bot and Abuse Protection**, enable CAPTCHA, select **Turnstile**, and save the matching **secret key**. The secret belongs only in Supabase, never in this repository, Vercel variables or chat.
+4. Verify all three email flows in a browser, including an expired challenge and retry. Check that direct Auth requests with a missing/invalid token are rejected by Supabase, not just by the UI. Keep an administrator session open during setup.
+
+The widget alone does **not** protect the Auth API. Supabase must have CAPTCHA enabled: it performs the actual server-side verification, including expiration and one-time use. The app checks token shape and forwards it through the SDK's `captchaToken` option. Roll out both sides together in staging before production: enabling Supabase first temporarily blocks the old client; enabling only the app leaves the API unprotected. To roll back a coordinated rollout, disable Supabase CAPTCHA and deploy the app with `none`; neither setting disables the other automatically.
+
+The compact widget fits narrow forms, follows the app's language/theme, and clears its token on submission, error or expiration. Failed script loading keeps submission disabled; retry reloads the page to make a fresh network request (email/password drafts are not retained across that reload). Password updates from a verified recovery session and social OAuth flows do not render this widget.
+
+Use [Cloudflare's official dummy keys](https://developers.cloudflare.com/turnstile/troubleshooting/testing/) only for isolated local/test environments. Never install dummy keys on a real hosted Auth project or rely on them for protection. Existing local Supabase E2E tests run with CAPTCHA disabled; the unit/integration suite additionally covers enabled-mode form lifecycle and the real SDK request payload. A real hosted CAPTCHA/email round trip still requires matching real keys and an allowed SMTP recipient.
+
 ## 5. Configure URLs correctly
 
 Two kinds of redirect are easy to confuse:

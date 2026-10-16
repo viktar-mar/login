@@ -39,7 +39,11 @@ function invalidFormState(
     ),
   );
 
-  return { status: "error", code, fieldErrors };
+  return {
+    status: "error",
+    code: fieldErrors.captchaToken ? "captcha_failed" : code,
+    fieldErrors,
+  };
 }
 
 async function getClient(): Promise<SupabaseClient | null> {

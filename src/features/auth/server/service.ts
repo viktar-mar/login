@@ -3,6 +3,7 @@ import { publicEnv } from "@/config/env";
 import { siteConfig } from "@/config/site";
 import { safeNextPath } from "@/lib/navigation/safe-next";
 import { mapAuthError } from "../error-map";
+import { captchaTokenSchema } from "../schemas";
 import type {
   ForgotPasswordInput,
   LoginInput,
@@ -19,15 +20,16 @@ export type AuthServiceClient = {
     signInWithPassword(input: {
       email: string;
       password: string;
+      options?: { captchaToken?: string };
     }): AuthResponse;
     signUp(input: {
       email: string;
       password: string;
-      options: { emailRedirectTo: string };
+      options: { emailRedirectTo: string; captchaToken?: string };
     }): AuthResponse<{ session?: unknown | null }>;
     resetPasswordForEmail(
       email: string,
-      options: { redirectTo: string },
+      options: { redirectTo: string; captchaToken?: string },
     ): AuthResponse;
     updateUser(input: { password: string }): AuthResponse;
     signOut(): Promise<{ error: unknown }>;
@@ -60,6 +62,14 @@ function siteOrigin(): string {
   return new URL(publicEnv.siteUrl).origin;
 }
 
+function captchaOptions(input: { captchaToken?: string }) {
+  const parsed = captchaTokenSchema.safeParse(input.captchaToken);
+  if (!parsed.success) return null;
+  return authConfig.captcha.provider === "turnstile"
+    ? { captchaToken: parsed.data }
+    : {};
+}
+
 function disabledEmailResult(): {
   ok: false;
   error: "provider_unavailable";
@@ -84,10 +94,14 @@ export async function signInWithPassword(
     return disabledEmailResult();
   }
 
+  const options = captchaOptions(input);
+  if (!options) return { ok: false, error: "captcha_failed" };
+
   try {
     const { error } = await client.auth.signInWithPassword({
       email: input.email,
       password: input.password,
+      ...(authConfig.captcha.provider === "turnstile" ? { options } : {}),
     });
 
     if (error) {
@@ -113,11 +127,14 @@ export async function signUpWithPassword(
     return disabledEmailResult();
   }
 
+  const options = captchaOptions(input);
+  if (!options) return { ok: false, error: "captcha_failed" };
+
   try {
     const { data, error } = await client.auth.signUp({
       email: input.email,
       password: input.password,
-      options: { emailRedirectTo: siteOrigin() },
+      options: { emailRedirectTo: siteOrigin(), ...options },
     });
 
     if (error) {
@@ -148,8 +165,12 @@ export async function sendPasswordRecovery(
     return disabledEmailResult();
   }
 
+  const options = captchaOptions(input);
+  if (!options) return { ok: false, error: "captcha_failed" };
+
   try {
     const { error } = await client.auth.resetPasswordForEmail(input.email, {
+      ...options,
       redirectTo: new URL(
         "/auth/callback?next=%2Fupdate-password",
         siteOrigin(),

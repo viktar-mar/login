@@ -6,4 +6,6 @@ export const publicEnv = parsePublicEnv({
   siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
   authProviders: process.env.NEXT_PUBLIC_AUTH_PROVIDERS,
   emailAuth: process.env.NEXT_PUBLIC_ENABLE_EMAIL_AUTH,
+  captchaProvider: process.env.NEXT_PUBLIC_CAPTCHA_PROVIDER,
+  turnstileSiteKey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
 });

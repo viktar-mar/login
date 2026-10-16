@@ -29,6 +29,7 @@ export function AuthMessage({ state }: AuthMessageProps) {
   }
 
   const messages = {
+    captcha_failed: dictionary.captcha.failed,
     invalid_credentials: dictionary.errors.invalidCredentials,
     email_not_confirmed: dictionary.errors.emailNotConfirmed,
     weak_password: dictionary.validation.passwordMinLength,

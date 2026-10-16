@@ -1,6 +1,7 @@
 import type { AuthErrorCode } from "./types";
 
 const authErrorCodes: Readonly<Record<string, AuthErrorCode>> = {
+  captcha_failed: "captcha_failed",
   invalid_credentials: "invalid_credentials",
   email_not_confirmed: "email_not_confirmed",
   weak_password: "weak_password",

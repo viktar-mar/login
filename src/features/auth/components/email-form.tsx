@@ -16,6 +16,7 @@ import { useDictionary } from "@/i18n/provider";
 import { safeNextPath } from "@/lib/navigation/safe-next";
 import { siteConfig } from "@/config/site";
 import { AuthMessage } from "./auth-message";
+import { CaptchaWidget } from "./captcha-widget";
 import { PasswordField } from "./password-field";
 import { SubmitButton } from "./submit-button";
 
@@ -41,14 +42,22 @@ export function EmailForm({ mode, next }: EmailFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
+  const captchaRequired =
+    authConfig.captcha.provider === "turnstile" && mode !== "update";
   const sanitizedNext = safeNextPath(next, siteConfig.afterLoginPath);
   const selectedAction = actions[mode];
   const [state, formAction] = useActionState(
     async (previousState: AuthActionState, formData: FormData) => {
-      const result = await selectedAction(previousState, formData);
-      setPassword("");
-      setConfirmation("");
-      return result;
+      try {
+        return await selectedAction(previousState, formData);
+      } finally {
+        setPassword("");
+        setConfirmation("");
+        setCaptchaToken("");
+        setCaptchaResetKey((value) => value + 1);
+      }
     },
     initialState,
   );
@@ -169,7 +178,21 @@ export function EmailForm({ mode, next }: EmailFormProps) {
         </div>
       ) : null}
 
-      <SubmitButton className="w-full">{submitLabel}</SubmitButton>
+      {captchaRequired ? (
+        <>
+          <input type="hidden" name="captchaToken" value={captchaToken} />
+          <CaptchaWidget
+            onTokenChange={setCaptchaToken}
+            resetKey={captchaResetKey}
+          />
+        </>
+      ) : null}
+      <SubmitButton
+        className="w-full"
+        disabled={captchaRequired && !captchaToken}
+      >
+        {submitLabel}
+      </SubmitButton>
 
       {mode === "login" ? (
         <p className="text-muted-foreground text-center text-sm">

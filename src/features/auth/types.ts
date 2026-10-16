@@ -3,6 +3,7 @@ export type AuthErrorCode =
   | "email_not_confirmed"
   | "weak_password"
   | "rate_limited"
+  | "captcha_failed"
   | "invalid_link"
   | "provider_unavailable"
   | "unexpected";

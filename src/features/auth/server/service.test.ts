@@ -1,5 +1,13 @@
 import { AuthApiError } from "@supabase/supabase-js";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import type { AuthServiceClient } from "./service";
 
 type AuthMethod = ReturnType<typeof vi.fn>;
@@ -16,6 +24,7 @@ type AuthDouble = {
 
 let service: typeof import("./service");
 let client: AuthDouble & AuthServiceClient;
+let authConfig: typeof import("@/config/auth").authConfig;
 
 beforeAll(async () => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://project.example");
@@ -28,6 +37,11 @@ beforeAll(async () => {
   vi.stubEnv("NEXT_PUBLIC_ENABLE_EMAIL_AUTH", "true");
 
   service = await import("./service");
+  authConfig = (await import("@/config/auth")).authConfig;
+});
+
+afterEach(() => {
+  Object.assign(authConfig, { captcha: { provider: "none", siteKey: "" } });
 });
 
 beforeEach(() => {
@@ -44,6 +58,72 @@ beforeEach(() => {
 });
 
 describe("auth server service", () => {
+  it("passes CAPTCHA through all protected email flows without losing redirects", async () => {
+    Object.assign(authConfig, {
+      captcha: { provider: "turnstile", siteKey: "public-key" },
+    });
+    client.auth.signInWithPassword.mockResolvedValue({ data: {}, error: null });
+    client.auth.signUp.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+    client.auth.resetPasswordForEmail.mockResolvedValue({
+      data: {},
+      error: null,
+    });
+    const input = {
+      email: "reader@example.com",
+      password: "password",
+      confirmPassword: "password",
+      captchaToken: "one-time-token",
+    };
+    await service.signInWithPassword(client, input);
+    await service.signUpWithPassword(client, input);
+    await service.sendPasswordRecovery(client, input);
+    expect(client.auth.signInWithPassword).toHaveBeenCalledWith({
+      email: input.email,
+      password: input.password,
+      options: { captchaToken: "one-time-token" },
+    });
+    expect(client.auth.signUp).toHaveBeenCalledWith({
+      email: input.email,
+      password: input.password,
+      options: {
+        emailRedirectTo: "https://app.example",
+        captchaToken: "one-time-token",
+      },
+    });
+    expect(client.auth.resetPasswordForEmail).toHaveBeenCalledWith(
+      input.email,
+      {
+        redirectTo: "https://app.example/auth/callback?next=%2Fupdate-password",
+        captchaToken: "one-time-token",
+      },
+    );
+  });
+
+  it.each([
+    "signInWithPassword",
+    "signUpWithPassword",
+    "sendPasswordRecovery",
+  ] as const)(
+    "fails closed without a token in %s even when called outside an action",
+    async (method) => {
+      Object.assign(authConfig, {
+        captcha: { provider: "turnstile", siteKey: "public-key" },
+      });
+      const result = await service[method](client, {
+        email: "reader@example.com",
+        password: "password",
+        confirmPassword: "password",
+      });
+      expect(result).toEqual({ ok: false, error: "captcha_failed" });
+      expect(client.auth.signInWithPassword).not.toHaveBeenCalled();
+      expect(client.auth.signUp).not.toHaveBeenCalled();
+      expect(client.auth.resetPasswordForEmail).not.toHaveBeenCalled();
+    },
+  );
+
   it("signs in with a password and preserves a safe local continuation", async () => {
     client.auth.signInWithPassword.mockResolvedValue({
       data: { user: { id: "user-1" }, session: { access_token: "secret" } },

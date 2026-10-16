@@ -1,5 +1,13 @@
 import { AuthApiError, type SupabaseClient } from "@supabase/supabase-js";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { AuthActionState } from "./types";
 
@@ -22,6 +30,7 @@ type AuthDouble = {
 const idle: AuthActionState = { status: "idle" };
 let actions: typeof import("./actions");
 let client: AuthDouble;
+let authConfig: typeof import("@/config/auth").authConfig;
 
 function formData(values: Record<string, string>): FormData {
   const data = new FormData();
@@ -54,6 +63,11 @@ beforeAll(async () => {
   vi.stubEnv("NEXT_PUBLIC_ENABLE_EMAIL_AUTH", "true");
 
   actions = await import("./actions");
+  authConfig = (await import("@/config/auth")).authConfig;
+});
+
+afterEach(() => {
+  Object.assign(authConfig, { captcha: { provider: "none", siteKey: "" } });
 });
 
 beforeEach(() => {
@@ -84,6 +98,69 @@ beforeEach(() => {
 });
 
 describe("auth server actions", () => {
+  it.each(["loginAction", "signupAction", "forgotPasswordAction"] as const)(
+    "rejects missing CAPTCHA before any Auth call in %s",
+    async (name) => {
+      Object.assign(authConfig, {
+        captcha: { provider: "turnstile", siteKey: "public-key" },
+      });
+      const result = await actions[name](
+        idle,
+        formData({
+          email: "reader@example.com",
+          password: "password",
+          confirmPassword: "password",
+        }),
+      );
+      expect(result).toMatchObject({ status: "error", code: "captcha_failed" });
+      expect(createServerSupabaseClient).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["", "   ", "x".repeat(2049)])(
+    "rejects an unusable CAPTCHA token (case %#)",
+    async (captchaToken) => {
+      Object.assign(authConfig, {
+        captcha: { provider: "turnstile", siteKey: "public-key" },
+      });
+      const result = await actions.loginAction(
+        idle,
+        formData({
+          email: "reader@example.com",
+          password: "password",
+          captchaToken,
+        }),
+      );
+      expect(result).toMatchObject({ status: "error", code: "captcha_failed" });
+      expect(createServerSupabaseClient).not.toHaveBeenCalled();
+    },
+  );
+
+  it("forwards the submitted token to Supabase for server-side validation", async () => {
+    Object.assign(authConfig, {
+      captcha: { provider: "turnstile", siteKey: "public-key" },
+    });
+    client.auth.signInWithPassword.mockResolvedValue({
+      data: { user: null, session: null },
+      error: new AuthApiError("private captcha detail", 400, "captcha_failed"),
+    });
+    const result = await actions.loginAction(
+      idle,
+      formData({
+        email: "reader@example.com",
+        password: "password",
+        captchaToken: "one-time-token",
+      }),
+    );
+    expect(client.auth.signInWithPassword).toHaveBeenCalledWith({
+      email: "reader@example.com",
+      password: "password",
+      options: { captchaToken: "one-time-token" },
+    });
+    expect(result).toEqual({ status: "error", code: "captcha_failed" });
+    expect(JSON.stringify(result)).not.toContain("private captcha detail");
+  });
+
   it("rejects invalid login FormData before creating a Supabase client", async () => {
     const result = await actions.loginAction(
       idle,

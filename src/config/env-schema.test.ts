@@ -10,6 +10,45 @@ const validInput = {
 };
 
 describe("parsePublicEnv", () => {
+  it("leaves CAPTCHA off without additional configuration", () => {
+    expect(parsePublicEnv(validInput)).toMatchObject({
+      captchaProvider: "none",
+      turnstileSiteKey: "",
+    });
+  });
+
+  it("accepts Turnstile only with its public site key", () => {
+    expect(
+      parsePublicEnv({
+        ...validInput,
+        captchaProvider: "turnstile",
+        turnstileSiteKey: "public-site-key",
+      }),
+    ).toMatchObject({
+      captchaProvider: "turnstile",
+      turnstileSiteKey: "public-site-key",
+    });
+  });
+
+  it.each([undefined, "", "   "])(
+    "fails closed for Turnstile without a usable site key: %j",
+    (turnstileSiteKey) => {
+      expect(() =>
+        parsePublicEnv({
+          ...validInput,
+          captchaProvider: "turnstile",
+          turnstileSiteKey,
+        }),
+      ).toThrow();
+    },
+  );
+
+  it("rejects an unknown CAPTCHA provider", () => {
+    expect(() =>
+      parsePublicEnv({ ...validInput, captchaProvider: "unknown" }),
+    ).toThrow();
+  });
+
   it("parses enabled providers in their configured order", () => {
     expect(parsePublicEnv(validInput).authProviders).toEqual([
       "google",

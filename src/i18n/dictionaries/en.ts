@@ -44,6 +44,13 @@ export const en = {
     title: "Set a new password",
     success: "Your password has been updated.",
   },
+  captcha: {
+    loading: "Loading security check…",
+    failed: "Security check failed. Please try again.",
+    expired: "Security check expired. Please try again.",
+    verified: "Security check completed.",
+    retry: "Retry security check",
+  },
   oauth: {
     or: "Or",
     continueWith: "Continue with",

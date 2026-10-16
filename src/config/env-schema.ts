@@ -23,6 +23,8 @@ const rawPublicEnvSchema = z.object({
     .url("Site URL must be a valid URL"),
   authProviders: z.string(),
   emailAuth: z.enum(["true", "false"]),
+  captchaProvider: z.enum(["none", "turnstile"]).default("none"),
+  turnstileSiteKey: z.string().trim().default(""),
 });
 
 export type AuthProvider = z.infer<typeof providerSchema>;
@@ -33,6 +35,8 @@ export type PublicEnvInput = {
   siteUrl: string | undefined;
   authProviders: string | undefined;
   emailAuth: string | undefined;
+  captchaProvider?: string;
+  turnstileSiteKey?: string;
 };
 
 export type PublicEnv = {
@@ -41,10 +45,15 @@ export type PublicEnv = {
   siteUrl: string;
   authProviders: AuthProvider[];
   emailAuth: boolean;
+  captchaProvider: "none" | "turnstile";
+  turnstileSiteKey: string;
 };
 
 export function parsePublicEnv(input: PublicEnvInput): PublicEnv {
   const env = rawPublicEnvSchema.parse(input);
+  if (env.captchaProvider === "turnstile" && !env.turnstileSiteKey) {
+    throw new Error("Turnstile site key is required when CAPTCHA is enabled");
+  }
   const authProviders = env.authProviders
     .split(",")
     .filter(Boolean)
@@ -72,5 +81,7 @@ export function parsePublicEnv(input: PublicEnvInput): PublicEnv {
     siteUrl: env.siteUrl,
     authProviders,
     emailAuth,
+    captchaProvider: env.captchaProvider,
+    turnstileSiteKey: env.turnstileSiteKey,
   };
 }
