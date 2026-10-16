@@ -249,7 +249,29 @@ test("local email signup, profile persistence, logout, login and password recove
     email,
     "email",
   );
-  await page.goto(confirmationLink);
+  // Confirm in a separate browser: the link must not sign that browser in,
+  // and the original signup browser still needs the user's password.
+  const confirmationContext = await page.context().browser()!.newContext();
+  try {
+    const confirmationPage = await confirmationContext.newPage();
+    await confirmationPage.goto(confirmationLink);
+    await expect(confirmationPage).toHaveURL(
+      "http://localhost:3000/login?confirmed=email",
+    );
+    await expect(confirmationPage.getByRole("status")).toHaveText(
+      "Your email has been confirmed. Sign in with your password.",
+    );
+    await confirmationPage.goto("http://localhost:3000/dashboard");
+    await expect(confirmationPage).toHaveURL(
+      "http://localhost:3000/login?next=%2Fdashboard",
+    );
+  } finally {
+    await confirmationContext.close();
+  }
+  await page.goto("/login");
+  await page.getByLabel("Email address", { exact: true }).fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL("http://localhost:3000/dashboard");
   await expect(
     page.getByRole("heading", { name: "Dashboard", exact: true }),

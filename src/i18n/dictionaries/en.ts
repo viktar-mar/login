@@ -33,7 +33,7 @@ export const en = {
   emailConfirmation: {
     title: "Confirm your email",
     message: "Check your inbox and follow the confirmation link.",
-    success: "Your email has been confirmed.",
+    success: "Your email has been confirmed. Sign in with your password.",
   },
   passwordRecovery: {
     title: "Reset your password",

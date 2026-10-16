@@ -3,6 +3,7 @@ import type { JwtPayload } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { publicEnv } from "@/config/env";
 import { siteConfig } from "@/config/site";
+import { privateAuthResponse } from "@/lib/auth/private-response";
 import { safeNextPath } from "@/lib/navigation/safe-next";
 
 export type AuthRoute = "protected" | "anonymous-only" | "public";
@@ -109,10 +110,12 @@ export async function updateSupabaseSession(
   const redirectUrl = getAuthRedirect(request, data?.claims);
 
   if (!redirectUrl) {
-    return response;
+    return classifyAuthRoute(request.nextUrl.pathname) === "public"
+      ? response
+      : privateAuthResponse(response);
   }
 
   const redirectResponse = NextResponse.redirect(redirectUrl);
   applySessionWrites(redirectResponse, sessionCookies, sessionHeaders);
-  return redirectResponse;
+  return privateAuthResponse(redirectResponse);
 }

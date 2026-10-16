@@ -21,9 +21,10 @@ export default async function LoginPage({
   searchParams: Promise<{
     next?: string | string[];
     error?: string | string[];
+    confirmed?: string | string[];
   }>;
 }) {
-  const [{ next, error }, identity, locale] = await Promise.all([
+  const [{ next, error, confirmed }, identity, locale] = await Promise.all([
     searchParams,
     getVerifiedIdentity(),
     getRequestLocale(),
@@ -43,6 +44,13 @@ export default async function LoginPage({
     <I18nProvider locale={locale} dictionary={dictionary}>
       <AuthShell title={dictionary.auth.signIn}>
         <div className="space-y-5">
+          {confirmed === "email" && (
+            <Alert role="status">
+              <AlertDescription>
+                {dictionary.emailConfirmation.success}
+              </AlertDescription>
+            </Alert>
+          )}
           {error === "invalid_link" && (
             <Alert variant="destructive">
               <AlertDescription>

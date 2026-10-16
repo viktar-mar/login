@@ -1,6 +1,7 @@
+import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { publicEnv } from "@/config/env";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { privateAuthResponse } from "@/lib/auth/private-response";
 
 // Recovery uses the PKCE callback so its verified session retains recovery AMR.
 const confirmationTypes = ["email"] as const;
@@ -19,9 +20,11 @@ function redirectTo(path: string, error?: "invalid_link") {
 
   if (error) {
     destination.searchParams.set("error", error);
+  } else {
+    destination.searchParams.set("confirmed", "email");
   }
 
-  return NextResponse.redirect(destination);
+  return privateAuthResponse(NextResponse.redirect(destination));
 }
 
 export async function GET(request: Request) {
@@ -42,18 +45,30 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = await createServerSupabaseClient();
-    const { error } = await supabase.auth.verifyOtp({
+    // A confirmation link is a bearer credential, not proof that this browser
+    // owns the account. Never install its session or read the visitor's cookies.
+    const supabase = createClient(
+      publicEnv.supabaseUrl,
+      publicEnv.supabasePublishableKey,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      },
+    );
+    const { data, error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
       type,
     });
 
-    if (error) {
+    if (error || !data.user?.id) {
       return redirectTo("/login", "invalid_link");
     }
   } catch {
     return redirectTo("/login", "invalid_link");
   }
 
-  return redirectTo("/dashboard");
+  return redirectTo("/login");
 }

@@ -96,4 +96,28 @@ describe("GET /auth/callback", () => {
     expect(response.headers.get("location")).not.toContain("secret-code");
     expect(response.headers.get("location")).not.toContain("raw");
   });
+
+  it.each(["success", "missing", "failure", "exception"])(
+    "prevents caching of the %s callback response",
+    async (outcome) => {
+      if (outcome === "failure") {
+        exchangeCodeForSession.mockResolvedValue({
+          data: { session: null, user: null },
+          error: { code: "bad_code_verifier" },
+        });
+      } else if (outcome === "exception") {
+        exchangeCodeForSession.mockRejectedValue(new Error("private detail"));
+      }
+      const query = outcome === "missing" ? "" : "?code=one-time-code";
+      const response = await GET(
+        new Request(`https://app.example/auth/callback${query}`),
+      );
+
+      expect(response.headers.get("cache-control")).toBe(
+        "private, no-cache, no-store, must-revalidate, max-age=0",
+      );
+      expect(response.headers.get("pragma")).toBe("no-cache");
+      expect(response.headers.get("expires")).toBe("0");
+    },
+  );
 });

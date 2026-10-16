@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { publicEnv } from "@/config/env";
 import { siteConfig } from "@/config/site";
+import { privateAuthResponse } from "@/lib/auth/private-response";
 import { safeNextPath } from "@/lib/navigation/safe-next";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -18,7 +19,7 @@ function redirectTo(path: string, error?: "invalid_link") {
     destination.search = localTarget.search;
   }
 
-  return NextResponse.redirect(destination);
+  return privateAuthResponse(NextResponse.redirect(destination));
 }
 
 export async function GET(request: Request) {

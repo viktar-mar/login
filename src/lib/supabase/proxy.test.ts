@@ -42,18 +42,20 @@ const refreshedCookies: CookieWrite[] = [
   },
 ];
 
-function arrangeClaims(claims: { sub: string } | null) {
+function arrangeClaims(claims: { sub: string } | null, refresh = true) {
   vi.mocked(createServerClient).mockImplementation((_url, _key, options) => {
     const cookies = options.cookies as ProxyCookieAdapter;
 
     return {
       auth: {
         getClaims: async () => {
-          cookies.setAll(refreshedCookies, {
-            "Cache-Control":
-              "private, no-cache, no-store, must-revalidate, max-age=0",
-            Expires: "0",
-          });
+          if (refresh) {
+            cookies.setAll(refreshedCookies, {
+              "Cache-Control":
+                "private, no-cache, no-store, must-revalidate, max-age=0",
+              Expires: "0",
+            });
+          }
 
           return claims
             ? {
@@ -118,6 +120,41 @@ describe("getAuthRedirect", () => {
 describe("updateSupabaseSession", () => {
   beforeEach(() => {
     vi.mocked(createServerClient).mockReset();
+  });
+
+  it.each([
+    ["/dashboard", null, "/login?next=%2Fdashboard"],
+    ["/profile", { sub: "user-123" }, null],
+    ["/update-password", null, "/login?next=%2Fupdate-password"],
+    ["/login", null, null],
+    ["/signup", { sub: "user-123" }, "/dashboard"],
+    ["/forgot-password", null, null],
+  ] as const)(
+    "prevents caching of %s even without a token refresh",
+    async (path, claims, redirect) => {
+      arrangeClaims(claims, false);
+      const response = await updateSupabaseSession(
+        new NextRequest(`https://app.example${path}`),
+      );
+
+      expect(response.headers.get("location")).toBe(
+        redirect ? `https://app.example${redirect}` : null,
+      );
+      expect(response.headers.get("cache-control")).toBe(
+        "private, no-cache, no-store, must-revalidate, max-age=0",
+      );
+      expect(response.headers.get("pragma")).toBe("no-cache");
+      expect(response.headers.get("expires")).toBe("0");
+      expect(response.cookies.getAll()).toEqual([]);
+    },
+  );
+
+  it("does not disable caching of public pages without a session refresh", async () => {
+    arrangeClaims(null, false);
+    const response = await updateSupabaseSession(
+      new NextRequest("https://app.example/"),
+    );
+    expect(response.headers.get("cache-control")).toBeNull();
   });
 
   it("keeps every refreshed cookie and cache header on pass-through responses", async () => {

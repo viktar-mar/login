@@ -113,7 +113,9 @@ In **Authentication → Email Templates**, update these two templates. This appl
 </a>
 ```
 
-`signUp` supplies the configured site origin as `.RedirectTo`. The application verifies the signup token and sends the user to `/dashboard`.
+`signUp` supplies the configured site origin as `.RedirectTo`. The application verifies the signup token with an isolated, non-persisting client and sends the user to `/login?confirmed=email`. The login page shows a localized confirmation and asks the user to sign in with their password. The email may be opened on a different device or browser: confirmation does not require the signup browser's cookies and never installs the link owner's session. An already signed-in visitor keeps their existing account instead of being switched to the account in the link.
+
+Keep this token-hash template for signup. Using Supabase's complete confirmation URL instead would select a different flow with different session behavior. Password recovery intentionally uses that complete URL, as described below.
 
 **Reset password** must use Supabase's complete confirmation URL:
 
@@ -124,6 +126,8 @@ In **Authentication → Email Templates**, update these two templates. This appl
 Password recovery uses same-browser PKCE. The app requests a redirect to `/auth/callback?next=%2Fupdate-password`; Supabase's confirmation URL performs verification and then returns the browser to that callback. The recovery email must be opened in the same browser that requested it so the PKCE verifier cookie is available.
 
 Direct recovery links to `/auth/confirm?token_hash=...&type=recovery` are rejected. After changing an older recovery template, discard old recovery emails and request a new one. Existing messages do not acquire the new link format.
+
+Both auth link handlers return `Cache-Control: private, no-cache, no-store, must-revalidate, max-age=0`, `Pragma: no-cache`, and `Expires: 0` on success and failure. The request proxy applies the same policy to protected and anonymous-only auth pages, even when no token refresh occurs, while preserving refreshed session cookies. Do not override these headers with CDN caching rules or enable ISR on authenticated routes; see Supabase's [SSR caching guidance](https://supabase.com/docs/guides/auth/server-side/advanced-guide#can-i-use-server-side-rendering-with-a-cdn-or-cache).
 
 Compare with the checked-in `supabase/templates/confirmation.html` and `supabase/templates/recovery.html`. Supabase documents the available variables in [Email Templates](https://supabase.com/docs/guides/auth/auth-email-templates). Without [custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp), Supabase's hosted default sender is for evaluation: signup and recovery messages can be sent only to email addresses belonging to members of the project's Supabase team. Configure custom SMTP before testing arbitrary alternate addresses or serving real users.
 

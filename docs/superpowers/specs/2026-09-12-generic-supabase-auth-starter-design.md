@@ -127,11 +127,12 @@ English is the dictionary fallback for a missing translation key. Adding a langu
 - Signup validates fields, enforces the configured minimum password length of 8 characters, calls Supabase Auth, and redirects to a neutral "check your email" state when email confirmation is required.
 - Login uses password authentication and sends authenticated users only to a validated local `next` path or `siteConfig.afterLoginPath`.
 - Forgot-password requests send a recovery email whose verified destination is `/update-password`.
-- `/auth/confirm` accepts an allowlisted email action type and a `token_hash`, calls `verifyOtp`, removes sensitive query parameters, and establishes the cookie session. Signup confirmation continues to the post-login page; recovery continues to `/update-password`.
-- Update-password requires the recovery session created by `/auth/confirm` before accepting a new password.
+- `/auth/confirm` accepts only `type=email` and a single `token_hash`, calls `verifyOtp` with an isolated non-persisting client, and removes sensitive query parameters. It never reads or installs the visitor's auth cookies: confirmation may be opened in another browser without replacing an existing account. Signup confirmation continues to `/login?confirmed=email`, which displays a localized notice asking the user to sign in with their password.
+- Recovery uses Supabase's complete confirmation URL and a same-browser PKCE exchange at `/auth/callback?next=%2Fupdate-password`. Update-password requires that verified recovery session and recovery authentication method before accepting a new password.
+- Auth link responses and protected/anonymous-only auth pages explicitly prohibit browser and shared-cache storage on success and failure, including redirects without token refresh. Refreshed session cookies and SDK cache headers are preserved.
 - Logout clears the Supabase session and redirects to `/login`.
 
-Client-side validation improves feedback, but server actions validate the same inputs again before calling Supabase. The setup guide instructs adopters to set the Supabase minimum password length to the same value as `authConfig.passwordMinLength` whenever they customize it. The SSR-compatible Supabase confirmation and recovery email templates are documented and use `{{ .TokenHash }}` rather than returning a session in a URL fragment.
+Client-side validation improves feedback, but server actions validate the same inputs again before calling Supabase. The setup guide instructs adopters to set the Supabase minimum password length to the same value as `authConfig.passwordMinLength` whenever they customize it. The signup template uses `{{ .TokenHash }}` and the recovery template uses `{{ .ConfirmationURL }}`; their different session behavior is documented explicitly.
 
 ### Social login
 
