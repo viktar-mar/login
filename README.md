@@ -187,6 +187,17 @@ Provider guides:
 
 Provider portals vary in consent screens, test-user restrictions, domain verification, privacy-policy requirements, and app review. Complete the provider's current production review/verification process before opening login to real users. A button in the starter does not make an unreviewed provider app production-ready.
 
+### Staging OAuth status — 2026-10-19
+
+These results apply to the isolated site `https://login-staging.vercel.app`, not to every application created from this starter:
+
+- **Google: verified.** Google is enabled in the staging Supabase project, and Vercel's Production environment for `login-staging` uses `NEXT_PUBLIC_AUTH_PROVIDERS=google`. After redeployment, the browser reached Google's account chooser; the user completed Google sign-in and confirmed access to the protected dashboard. The Google app remains in **Testing** mode with configured test users; this is not approval for public production use.
+- **Apple: awaiting Apple Developer Support.** Membership is active, but no App ID, Services ID, or signing key has been configured for this integration. An inquiry was submitted about web-only eligibility and testing before publishing a native App Store application. Apple remains disabled and real sign-in is untested pending clarification of [Apple's requirements](https://developer.apple.com/documentation/signinwithapple/configuring-your-environment-for-sign-in-with-apple).
+- **Facebook: awaiting Meta support.** Developer registration is blocked by the missing phone-verification SMS code. Facebook remains disabled and real sign-in is untested; the underlying delivery issue has not been established.
+- GitHub, Azure (Microsoft), and Discord remain optional, disabled on staging, and untested with real provider accounts.
+
+Email/password and Turnstile remain enabled, and the verified Vercel build workaround `NEXT_ENABLE_ADAPTER=0` is retained. The successful Google round trip was completed manually by the user; it is not an automated OAuth test or a fresh regression run of the email flows. See the [detailed OAuth checkpoint](docs/superpowers/plans/2026-09-12-generic-supabase-auth-starter.md#google-oauth-verified-and-provider-support-pending--2026-10-19) for deployment evidence and remaining boundaries. Provider credentials stay in Supabase; this status does not change the generic starter's defaults.
+
 ## 7. Run the app and customize it
 
 Start development:
@@ -327,7 +338,7 @@ This rule reduces application-side abuse only once enforcement is explicitly ena
 - The isolated hosted application at `https://login-staging.vercel.app` was rebuilt with `NEXT_ENABLE_ADAPTER=0`. The user confirmed a real password login after CAPTCHA and access to the dashboard on the updated deployment. Real signup/confirmation and password recovery had passed earlier; their email round trips were not repeated after this rebuild.
 - Missing-CAPTCHA submissions to all three email Server Actions returned `captcha_failed` with a CAPTCHA field error before creating a Supabase client. A direct Supabase password-login request without CAPTCHA also returned HTTP 400 / `captcha_failed`. Anonymous dashboard and profile requests redirected to login.
 - With explicit user approval, exactly 61 synthetic login submissions ran within one minute in edge region `cdg1`, without CAPTCHA. CDN records showed 60 `allow` actions followed by one `log`; the rule-specific exceedance counter increased from zero to one. All 61 submissions stopped at application validation, with no Supabase Auth requests, created users, or sent emails. HTTP 200 was only the Server Action transport status, not successful authentication.
-- The live rule remained at 60 requests per IP per 60 seconds in **Log** mode, with no unpublished changes. This proves observation on the tested deployment, not enforced blocking or production readiness. A verified SMTP sending domain for other recipients, live OAuth testing for enabled providers, and release-time security/dependency review remain separate work.
+- The live rule remained at 60 requests per IP per 60 seconds in **Log** mode, with no unpublished changes. This proves observation on the tested deployment, not enforced blocking or production readiness. At that checkpoint, live OAuth testing was still pending; the later Google result is recorded in [Staging OAuth status](#staging-oauth-status--2026-10-19). A verified SMTP sending domain for other recipients and release-time security/dependency review remain separate work.
 
 The detailed comparison, rollout, cleanup, and verification boundaries are recorded in the [implementation checkpoint](docs/superpowers/plans/2026-09-12-generic-supabase-auth-starter.md#verified-legacy-builder-and-staging-waf-counter--2026-10-16-utc). Reproduce exceedance tests only with explicit approval and safe synthetic inputs that stop before the Auth API; do not repeat them automatically or consume real email quotas.
 
